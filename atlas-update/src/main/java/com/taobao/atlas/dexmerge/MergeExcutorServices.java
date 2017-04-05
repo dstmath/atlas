@@ -2,10 +2,6 @@ package com.taobao.atlas.dexmerge;
 
 import android.os.RemoteException;
 import android.util.Log;
-
-import com.taobao.atlas.dex.Dex;
-import com.taobao.atlas.dexmerge.dx.merge.CollisionPolicy;
-import com.taobao.atlas.dexmerge.dx.merge.DexMerger;
 import com.taobao.common.dexpatcher.DexPatchApplier;
 
 import java.io.*;
@@ -31,6 +27,9 @@ public class MergeExcutorServices {
     List<Future<Boolean>> fList = new ArrayList<Future<Boolean>>();
     private static final String TAG = "mergeTask";
 
+    public static OS os = OS.mac;
+
+
     public MergeExcutorServices(IDexMergeCallback mCallback) {
         this.mCallback = mCallback;
         es = Executors.newFixedThreadPool(3);
@@ -45,12 +44,24 @@ public class MergeExcutorServices {
             sZipPatch = new ZipFile(patchFilePath);
             Enumeration<? extends ZipEntry> zes = sZipPatch.entries();
             ZipEntry entry = null;
-            String key;
+            String key = null;
+
             HashMap<String,List<ZipEntry>> bundleEntryGroup= new HashMap<String,List<ZipEntry>>();
             while (zes.hasMoreElements()) {
                 entry = zes.nextElement();
-                if(entry.getName().startsWith("lib")&&entry.getName().indexOf("/")!= -1){
-                    key = entry.getName().substring(3,entry.getName().indexOf("/"));
+                if (entry.getName().equals("libcom_taobao_maindex.so")){
+                    List<ZipEntry>mainDex = new ArrayList<ZipEntry>();
+                    mainDex.add(entry);
+                    bundleEntryGroup.put("com_taobao_maindex",mainDex);
+                }else if(entry.getName().startsWith("lib")){
+                    if (entry.getName().indexOf("/")!= -1){
+                        key = entry.getName().substring(3,entry.getName().indexOf("/"));
+                        os = OS.mac;
+                    }else if (entry.getName().indexOf("\\")!= -1){
+                        key = entry.getName().substring(3,entry.getName().indexOf("\\"));
+                        os = OS.windows;
+
+                    }
                     List<ZipEntry> bundleEntry = null;
                     if((bundleEntry=bundleEntryGroup.get(key)) == null){
                         bundleEntry = new ArrayList<ZipEntry>();
@@ -59,10 +70,6 @@ public class MergeExcutorServices {
                     }else {
                         bundleEntryGroup.get(key).add(entry);
                     }
-                }else if (entry.getName().equals("libcom_taobao_maindex.so")){
-                    List<ZipEntry>mainDex = new ArrayList<ZipEntry>();
-                    mainDex.add(entry);
-                    bundleEntryGroup.put("com_taobao_maindex",mainDex);
                 }
             }
 
@@ -186,19 +193,19 @@ public class MergeExcutorServices {
         try {
 
             //方式一
-//            DexPatchApplier dexPatchApplier = new DexPatchApplier(inputStreams[0],inputStreams[1]);
-//            dexPatchApplier.executeAndSaveTo(newDexStream);
+            DexPatchApplier dexPatchApplier = new DexPatchApplier(inputStreams[0],inputStreams[1]);
+            dexPatchApplier.executeAndSaveTo(newDexStream);
             //方式二
-            Dex dex1 = new Dex(inputStreams[1]);
-            Dex dex2 = new Dex(inputStreams[0]);
-            List<Dex> dexs = new ArrayList<Dex>();
-            dexs.add(dex1);
-            dexs.add(dex2);
-            DexMerger mDexMerge = new DexMerger(new Dex[]{dex1, dex2}, CollisionPolicy.KEEP_FIRST);
-            mDexMerge.setCompactWasteThreshold(1);
-            Dex outDex = mDexMerge.merge();
-            outDex.writeTo(newDexStream);
-            newDexStream.flush();
+//            Dex dex1 = new Dex(inputStreams[1]);
+//            Dex dex2 = new Dex(inputStreams[0]);
+//            List<Dex> dexs = new ArrayList<Dex>();
+//            dexs.add(dex1);
+//            dexs.add(dex2);
+//            DexMerger mDexMerge = new DexMerger(new Dex[]{dex1, dex2}, CollisionPolicy.KEEP_FIRST);
+//            mDexMerge.setCompactWasteThreshold(1);
+//            Dex outDex = mDexMerge.merge();
+//            outDex.writeTo(newDexStream);
+//            newDexStream.flush();
             mCallback.onMergeFinish(bundleName, true, "Success");
             successCount.incrementAndGet();
         } catch (Throwable e) {
@@ -224,6 +231,9 @@ public class MergeExcutorServices {
 
         void prepareMerge(String patchBundleName,ZipFile sourceFile, ZipEntry patchDex, OutputStream newDexStream) throws IOException;
 
+    }
+    enum OS{
+        mac,windows,linux
     }
 
 }
