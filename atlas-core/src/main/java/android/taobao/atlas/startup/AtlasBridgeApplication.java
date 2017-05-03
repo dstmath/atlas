@@ -265,7 +265,6 @@ public class AtlasBridgeApplication extends Application{
         KernalConstants.RAW_APPLICATION_NAME = getClass().getName();
         boolean hasKernalPatched  = false;
         boolean isMainProcess = getBaseContext().getPackageName().equals(getProcessName(getBaseContext()));
-
         if(isUpdated){
             if (!isMainProcess) {
                 android.os.Process.killProcess(android.os.Process.myPid());
@@ -291,18 +290,6 @@ public class AtlasBridgeApplication extends Application{
                         KernalVersionManager.instance().rollbackHardly();
                     }
                     android.os.Process.killProcess(android.os.Process.myPid());
-                }
-                if(Build.VERSION.SDK_INT>=24) {
-                    ClassLoader currentClassLoader = getClassLoader();
-                    replacePathClassLoader();
-                    try {
-                        Class RuntimeVariablesClass = getClassLoader().loadClass("android.taobao.atlas.runtime.RuntimeVariables");
-                        Field rawClassLoaderField = RuntimeVariablesClass.getDeclaredField("sRawClassLoader");
-                        rawClassLoaderField.setAccessible(true);
-                        rawClassLoaderField.set(RuntimeVariablesClass,currentClassLoader);
-                    } catch (Throwable e) {
-                        e.printStackTrace();
-                    }
                 }
             }else{
                 //remove deprecated info
@@ -430,8 +417,9 @@ public class AtlasBridgeApplication extends Application{
         SharedPreferences prefs = context.getSharedPreferences("atlas_configs", Context.MODE_PRIVATE);
         int lastVersionCode = prefs.getInt("last_version_code", 0);
         String lastVersionName = prefs.getString("last_version_name", "");
+        long lastupdatetime = prefs.getLong("lastupdatetime",-1);
         if(packageInfo.versionCode==lastVersionCode && TextUtils.equals(packageInfo.versionName,
-                lastVersionName) && !needRollback()){
+                lastVersionName) && lastupdatetime==packageInfo.lastUpdateTime && !needRollback()){
             return false;
         }
 
@@ -463,25 +451,6 @@ public class AtlasBridgeApplication extends Application{
             }
         }
         return false;
-    }
-
-    private void replacePathClassLoader(){
-        ClassLoader loader = getClass().getClassLoader();
-        boolean needReplace = false;
-        do{
-            if(loader.getClass().getName().equals(PathClassLoader.class.getName())){
-                needReplace = true;
-                break;
-            }
-        }
-        while((loader=loader.getParent())!=null);
-        if(needReplace){
-            try {
-                NClassLoader.replacePathClassLoader(getBaseContext(),AtlasBridgeApplication.class.getClassLoader());
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
     }
 
     public void deleteDirectory(final File path) {
